@@ -32,9 +32,6 @@
     .controls {
       margin-top: 20px;
     }
-    .controls input[type="range"] {
-      width: 300px;
-    }
     #popup {
       display: none;
       position: fixed;
@@ -60,6 +57,12 @@
       background-color: rgba(0, 0, 0, 0.5);
       z-index: 999;
     }
+    .id-buttons {
+      margin: 20px 0;
+    }
+    .id-buttons button {
+      margin-right: 10px;
+    }
   </style>
   <script src="https://www.youtube.com/iframe_api"></script>
 </head>
@@ -67,6 +70,7 @@
   <h1>動画一括再生アプリ</h1>
 
   <button onclick="showPopup()">動画を追加</button>
+  <div class="id-buttons" id="idButtons"></div>
 
   <div class="video-container" id="videoContainer"></div>
 
@@ -94,8 +98,10 @@
 
   <script>
     const videoContainer = document.getElementById('videoContainer');
+    const idButtons = document.getElementById('idButtons');
     let localVideos = [];
     let youtubePlayers = [];
+    let videoCounter = 0; // ID用のカウンター
 
     function showPopup() {
       document.getElementById('popup').style.display = 'block';
@@ -108,19 +114,20 @@
     }
 
     function addVideo() {
-      const title = document.getElementById('videoTitle').value;
+      const title = document.getElementById('videoTitle').value || '無題';
       const url = document.getElementById('videoUrl').value;
       const fileInput = document.getElementById('localVideo');
       const file = fileInput.files[0];
+      const id = ++videoCounter;
 
       if (url) {
         if (url.includes("youtube.com") || url.includes("youtu.be")) {
-          addYouTubeVideo(title, url);
+          addYouTubeVideo(id, title, url);
         } else if (url.includes("drive.google.com")) {
-          addGoogleDriveVideo(title, url);
+          addGoogleDriveVideo(id, title, url);
         }
       } else if (file) {
-        addLocalVideo(title, file);
+        addLocalVideo(id, title, file);
       }
 
       // リセットして非表示にする
@@ -130,9 +137,9 @@
       hidePopup();
     }
 
-    function addYouTubeVideo(title, url) {
+    function addYouTubeVideo(id, title, url) {
       const videoId = url.split("v=")[1] || url.split("youtu.be/")[1];
-      const wrapper = createVideoWrapper(title);
+      const wrapper = createVideoWrapper(id, title);
       const playerId = `player-${youtubePlayers.length}`;
       wrapper.innerHTML += `<div id="${playerId}"></div>`;
       videoContainer.appendChild(wrapper);
@@ -140,38 +147,71 @@
       const player = new YT.Player(playerId, {
         videoId: videoId,
         events: {
-          onReady: () => youtubePlayers.push(player)
+          onReady: () => {
+            youtubePlayers.push(player);
+            player.mute(); // デフォルトでミュート
+          }
         }
       });
+
+      createIdButton(id, () => unmuteYouTube(player));
     }
 
-    function addGoogleDriveVideo(title, url) {
-      const wrapper = createVideoWrapper(title);
+    function addGoogleDriveVideo(id, title, url) {
+      const wrapper = createVideoWrapper(id, title);
       const iframe = document.createElement('iframe');
       iframe.src = url.replace("/view", "/preview");
       iframe.setAttribute("allow", "autoplay");
+      iframe.muted = true; // ミュートの疑似設定
       wrapper.appendChild(iframe);
       videoContainer.appendChild(wrapper);
+
+      createIdButton(id, () => alert("Google Drive動画のミュート解除はサポートされていません"));
     }
 
-    function addLocalVideo(title, file) {
-      const wrapper = createVideoWrapper(title);
+    function addLocalVideo(id, title, file) {
+      const wrapper = createVideoWrapper(id, title);
       const video = document.createElement('video');
       video.src = URL.createObjectURL(file);
       video.controls = true;
+      video.muted = true; // デフォルトでミュート
       localVideos.push(video);
       wrapper.appendChild(video);
       videoContainer.appendChild(wrapper);
+
+      createIdButton(id, () => unmuteLocalVideo(video));
     }
 
-    function createVideoWrapper(title) {
+    function createVideoWrapper(id, title) {
       const wrapper = document.createElement('div');
       wrapper.className = 'video-wrapper';
       const titleDiv = document.createElement('div');
       titleDiv.className = 'video-title';
-      titleDiv.textContent = title || '無題';
+      titleDiv.textContent = `${title} (ID: ${id})`;
       wrapper.appendChild(titleDiv);
       return wrapper;
+    }
+
+    function createIdButton(id, onClick) {
+      const button = document.createElement('button');
+      button.textContent = `ID: ${id}`;
+      button.onclick = onClick;
+      idButtons.appendChild(button);
+    }
+
+    function unmuteYouTube(player) {
+      muteAll();
+      player.unMute();
+    }
+
+    function unmuteLocalVideo(video) {
+      muteAll();
+      video.muted = false;
+    }
+
+    function muteAll() {
+      localVideos.forEach(video => (video.muted = true));
+      youtubePlayers.forEach(player => player.mute());
     }
 
     function playAll() {
