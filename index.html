@@ -80,6 +80,23 @@
       font-size: 14px;
       z-index: 100;
     }
+
+    /* スライダーの基本スタイル */
+    #sliderContainer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: #f9f9f9;
+      padding: 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #videoSlider {
+      width: 90%;
+    }
   </style>
   <script src="https://www.youtube.com/iframe_api"></script>
 </head>
@@ -91,9 +108,11 @@
     <button onclick="pauseAll()">停止</button>
     <button onclick="exportVideos()">エクスポート</button>
     <button onclick="importVideos()">インポート</button>
+    <button onclick="resetPage()">初期化</button>
     <div id="idButtons"></div>
     <input type="file" id="importFile" style="display:none;" onchange="handleImportFile(event)">
   </div>
+
 
   <div class="video-container" id="videoContainer"></div>
 
@@ -116,16 +135,23 @@
     style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 999;"
     onclick="hidePopup()"></div>
 
+  <!-- スライダー -->
+  <div class="slider-container" style="position: fixed; bottom: 0; width: 100%; background: #ccc; padding: 10px;">
+    <input type="range" id="videoSlider" min="0" max="100" value="0" step="1" style="width: 100%;">
+  </div>
+
   <script>
-    // JavaScriptコード
     const videoContainer = document.getElementById('videoContainer');
     const idButtons = document.getElementById('idButtons');
     const importFileInput = document.getElementById('importFile');
+    const videoSlider = document.getElementById('videoSlider');
     let videoList = [];
     let localVideos = [];
     let youtubePlayers = [];
     let videoCounter = 0;
     let currentHighlightedVideo = null;
+
+    videoSlider.addEventListener('input', handleSliderChange);
 
     function showPopup() {
       document.getElementById('popup').style.display = 'block';
@@ -186,15 +212,24 @@
 
     function addGoogleDriveVideo(id, title, url) {
       const wrapper = createVideoWrapper(id, title);
-      const iframe = document.createElement('iframe');
-      iframe.src = url.replace("/view", "/preview");
-      iframe.setAttribute("allow", "autoplay");
+
+      // Google Drive の共有リンクから直接再生用リンクを生成
+      const videoSrc = url.replace("/view", "/uc?export=download");
+
+      const video = document.createElement('video');
+      video.src = videoSrc;
+      video.controls = true;
+      video.muted = true;
+      video.onloadedmetadata = () => updateSliderMax(); // 動画読み込み後、スライダーの最大値を更新
       wrapper.classList.add('muted');
-      wrapper.appendChild(iframe);
+      localVideos.push(video);
+      wrapper.appendChild(video);
       videoContainer.appendChild(wrapper);
 
-      createIdButton(id, () => alert("Google Drive動画のミュート解除はサポートされていません"));
+      videoList.push({ id, title, url });
+      createIdButton(id, () => unmuteAndHighlight(video, wrapper));
     }
+
 
     function addLocalVideo(id, title, file) {
       const wrapper = createVideoWrapper(id, title);
@@ -207,6 +242,7 @@
       wrapper.appendChild(video);
       videoContainer.appendChild(wrapper);
 
+      videoList.push({ id, title, url: 'ローカル動画' });
       createIdButton(id, () => unmuteAndHighlight(video, wrapper));
     }
 
@@ -262,10 +298,6 @@
       youtubePlayers.forEach(player => player.pauseVideo());
     }
 
-    function importVideos() {
-      importFileInput.click();
-    }
-
     function exportVideos() {
       const blob = new Blob([JSON.stringify(videoList, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -274,6 +306,10 @@
       a.download = 'videos.json';
       a.click();
       URL.revokeObjectURL(url);
+    }
+
+    function importVideos() {
+      importFileInput.click();
     }
 
     function handleImportFile(event) {
@@ -289,26 +325,79 @@
     }
 
     function recreateVideos(data) {
-      videoContainer.innerHTML = '';
-      idButtons.innerHTML = '';
-      videoList = [];
-      localVideos = [];
-      youtubePlayers = [];
-      currentHighlightedVideo = null;
+      // 現在の最大 ID を取得
+      const maxExistingId = videoList.reduce((max, video) => Math.max(max, video.id), 0);
+      let nextId = maxExistingId + 1;
 
       data.forEach(video => {
-        const { id, title, url } = video;
-        videoCounter = Math.max(videoCounter, id); // IDを更新
+        const { title, url } = video;
+
+        // 新しい ID を割り当て
+        const newId = nextId++;
+
         if (url.includes("youtube.com") || url.includes("youtu.be")) {
-          addYouTubeVideo(id, title, url);
+          addYouTubeVideo(newId, title, url);
         } else if (url.includes("drive.google.com")) {
-          addGoogleDriveVideo(id, title, url);
+          addGoogleDriveVideo(newId, title, url);
         } else if (url === 'ローカル動画') {
-          // ローカル動画の再現は省略
           alert('ローカル動画は現在サポートされていません');
         }
       });
     }
+
+
+    function resetPage() {
+      location.reload(); // ページを再読み込み
+    }
+
+    function handleSliderChange() {
+      const time = videoSlider.value;
+
+      // YouTube 動画をシーク
+      youtubePlayers.forEach(player => {
+        const duration = player.getDuration();
+        if (duration > 0) {
+          player.seekTo(Math.min(time, duration));
+        }
+      });
+
+      // ローカル動画をシーク
+      localVideos.forEach(video => {
+        if (video.duration > 0) {
+          video.currentTime = Math.min(time, video.duration);
+        }
+      });
+    }
+
+    function updateSliderMax() {
+      // 最も長い動画の秒数を計算
+      const youtubeMax = youtubePlayers.reduce((max, player) => Math.max(max, player.getDuration() || 0), 0);
+      const localMax = localVideos.reduce((max, video) => Math.max(max, video.duration || 0), 0);
+      const maxDuration = Math.max(youtubeMax, localMax);
+
+      videoSlider.max = Math.ceil(maxDuration); // スライダーの最大値を設定
+    }
+    function playAll() {
+      localVideos.forEach(video => {
+        video.play();
+        video.ontimeupdate = () => syncSliderWithVideo(); // スライダーの同期
+      });
+
+      youtubePlayers.forEach(player => {
+        player.playVideo();
+        setInterval(() => syncSliderWithVideo(), 500); // YouTube プレイヤー用の同期
+      });
+    }
+
+    function syncSliderWithVideo() {
+      const youtubeCurrent = youtubePlayers.reduce((max, player) => Math.max(max, player.getCurrentTime() || 0), 0);
+      const localCurrent = localVideos.reduce((max, video) => Math.max(max, video.currentTime || 0), 0);
+      const currentTime = Math.max(youtubeCurrent, localCurrent);
+
+      videoSlider.value = Math.floor(currentTime); // スライダーを現在の再生位置に設定
+    }
+
+
   </script>
 </body>
 
