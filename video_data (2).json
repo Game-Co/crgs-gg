@@ -1,0 +1,15 @@
+{
+  "videos": [
+    {
+      "startTime": 0,
+      "url": "https://www.youtube.com/watch?v=HW88OBW7rmI",
+      "type": "youtube"
+    },
+    {
+      "startTime": 0,
+      "url": "blob:null/be5fed39-3015-493a-babb-b2a23444fda0",
+      "type": "local"
+    }
+  ],
+  "notes": []
+}
