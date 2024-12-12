@@ -4,76 +4,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>動画一括再生アプリ</title>
+    <title>Enhanced Video Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/video.js/dist/video-js.css" rel="stylesheet">
+    <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
     <style>
         body {
-            margin: 0;
             font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
+            margin: 20px;
         }
 
-        .controls {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            background-color: rgba(255, 255, 255, 0.9);
-            padding: 10px;
-            border-radius: 8px;
-            z-index: 1000;
-        }
-
-        .controls button,
-        .controls input {
-            display: block;
-            margin-bottom: 10px;
-        }
-
-        .video-container {
+        #video-list {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 20px;
+        }
+
+        .video-wrapper {
+            display: flex;
+            flex-direction: column;
+            position: relative;
             width: 100%;
-            height: 100%;
-            overflow-y: auto;
-            justify-content: center;
-            align-content: flex-start;
+            transition: all 0.3s ease;
         }
 
         .highlighted {
             order: -1;
             flex-basis: 100%;
-            height: 60%;
-            transition: all 0.3s ease;
             margin-bottom: 20px;
         }
 
+        .highlighted [id^="video-"] {
+            height: 400px;
+        }
+
         .muted {
-            flex-basis: 300px;
+            flex: 1 0 calc(25% - 20px);
             height: 200px;
-            transition: all 0.3s ease;
+            max-width: calc(25% - 20px);
+            box-sizing: border-box;
         }
 
         iframe,
-        video {
+        .video-js {
             width: 100%;
             height: 100%;
-        }
-
-        .video-wrapper {
-            display: flex;
-            position: relative;
-            justify-content: center;
-            align-items: center;
         }
 
         .video-title {
             position: absolute;
             top: 5px;
             left: 5px;
-
-
             background-color: rgba(0, 0, 0, 0.7);
             color: white;
             padding: 2px 5px;
@@ -81,183 +61,306 @@
             font-size: 14px;
             z-index: 100;
         }
+
+        .start-time-container {
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        #controls {
+            margin: 20px 0;
+        }
+
+        #seek-bar-container {
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #notes-container {
+            margin-top: 20px;
+        }
+
+        .note {
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
     </style>
-    <script src="https://www.youtube.com/iframe_api"></script>
 </head>
 
 <body>
 
-    <!-- 操作ボタン -->
-    <div class="controls">
-        <button onclick="showPopup()">動画を追加</button>
-        <button onclick="playAll()">再生</button>
-        <button onclick="pauseAll()">停止</button>
-        <div id="idButtons"></div>
+    <h1>Enhanced Video Manager</h1>
+
+    <div>
+        <input type="text" id="youtube-url" placeholder="Enter YouTube URL" style="width: 300px;">
+        <input type="file" id="local-video" accept="video/*">
+        <input type="text" id="video-title" placeholder="Enter Video Title" style="width: 300px;">
+        <button id="add-video">Add Video</button>
     </div>
 
-    <!-- 動画コンテナ -->
-    <div class="video-container" id="videoContainer"></div>
+    <div id="video-list"></div>
 
-    <!-- ポップアップ -->
-    <div id="popup"
-        style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 2px solid #ccc; border-radius: 10px; z-index: 1000;">
-        <h3>動画を追加</h3>
-        <label for="videoTitle">タイトル:</label>
-        <input type="text" id="videoTitle" placeholder="タイトルを入力">
-        <br>
-        <label for="videoUrl">動画URL (YouTube / Google Drive):</label>
-        <input type="text" id="videoUrl" placeholder="動画のURLを入力">
-        <br>
-        <label for="localVideo">またはローカル動画を選択:</label>
-        <input type="file" id="localVideo" accept="video/*">
-        <br>
-        <button onclick="addVideo()">追加</button>
-        <button onclick="hidePopup()">キャンセル</button>
+    <div id="controls">
+        <button id="play-all">Play All</button>
+        <button id="pause-all">Pause All</button>
+        <button id="mute-main">Mute All Except Main</button>
+        <button id="save-data">Save Data</button>
+        <input type="file" id="load-data" accept=".json">
+        <select id="select-video">
+            <option value="" disabled selected>Select a Video</option>
+        </select>
+
+        <button id="open-popup">Open Note Manager</button>
+
     </div>
-    <div id="overlay"
-        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 999;"
-        onclick="hidePopup()"></div>
 
+
+    <div id="seek-bar-container">
+        <label for="seek-bar">Seek Bar:</label>
+        <input type="range" id="seek-bar" min="0" max="100" step="0.1" value="0" style="width: 300px;">
+        <span id="current-time">0:00</span> / <span id="total-time">0:00</span>
+        <button id="toggle-play-pause">Play</button>
+    </div>
+
+    <div id="notes-container">
+        <h2>Notes</h2>
+        <div id="editor-container"></div>
+        <button id="save-note">Save Note</button>
+        <div id="saved-notes"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/video.js/dist/video.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-youtube/dist/Youtube.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lodash/lodash.min.js"></script>
+    <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
     <script>
-        const videoContainer = document.getElementById('videoContainer');
-        const idButtons = document.getElementById('idButtons');
-        let localVideos = [];
-        let youtubePlayers = [];
-        let videoCounter = 0;
-        let currentHighlightedVideo = null;
 
-        function showPopup() {
-            document.getElementById('popup').style.display = 'block';
-            document.getElementById('overlay').style.display = 'block';
-        }
+        const videoList = [];
+        let isPlaying = false;
 
-        function hidePopup() {
-            document.getElementById('popup').style.display = 'none';
-            document.getElementById('overlay').style.display = 'none';
-        }
+        const videoListContainer = document.getElementById('video-list');
+        const youtubeUrlInput = document.getElementById('youtube-url');
+        const localVideoInput = document.getElementById('local-video');
+        const videoTitleInput = document.getElementById('video-title');
+        const seekBar = document.getElementById('seek-bar');
+        const currentTimeDisplay = document.getElementById('current-time');
+        const totalTimeDisplay = document.getElementById('total-time');
+        const togglePlayPauseButton = document.getElementById('toggle-play-pause');
+        const selectVideoDropdown = document.getElementById('select-video');
 
-        function addVideo() {
-            const title = document.getElementById('videoTitle').value || '無題';
-            const url = document.getElementById('videoUrl').value;
-            const fileInput = document.getElementById('localVideo');
-            const file = fileInput.files[0];
-            const id = ++videoCounter;
+        // Function to add a video
+        function addVideo({ title, url, startTime = 0 }) {
+            const videoId = `video-${Date.now()}`;
+            const videoWrapper = document.createElement('div');
+            videoWrapper.classList.add('video-wrapper');
 
-            if (url) {
-                if (url.includes("youtube.com") || url.includes("youtu.be")) {
-                    addYouTubeVideo(id, title, url);
-                } else if (url.includes("drive.google.com")) {
-                    addGoogleDriveVideo(id, title, url);
-                }
-            } else if (file) {
-                addLocalVideo(id, title, file);
+            let videoSetup;
+
+            if (url.startsWith('http')) { // YouTube video
+                videoSetup = `
+            <video
+                id="${videoId}"
+                class="video-js"
+                controls
+                preload="auto"
+                data-setup='{
+                    "techOrder": ["youtube"],
+                    "sources": [{"src": "${url}", "type": "video/youtube"}]
+                }'>
+            </video>
+        `;
+            } else { // Local video
+                videoSetup = `
+            <video
+                id="${videoId}"
+                class="video-js"
+                controls
+                preload="auto"
+                data-setup='{}'>
+                <source src="${url}" type="video/mp4">
+            </video>
+        `;
             }
 
-            document.getElementById('videoTitle').value = '';
-            document.getElementById('videoUrl').value = '';
-            fileInput.value = '';
-            hidePopup();
-        }
+            videoWrapper.innerHTML = `
+        ${videoSetup}
+        <div class="video-title">${title}</div>
+        <div class="start-time-container">
+            <label>Start Time: <input type="number" class="start-time" value="${startTime}" style="width: 60px;"> sec</label>
+        </div>
+    `;
+            videoListContainer.appendChild(videoWrapper);
 
-        function addYouTubeVideo(id, title, url) {
-            const videoId = url.split("v=")[1] || url.split("youtu.be/")[1];
-            const wrapper = createVideoWrapper(id, title);
-            const playerId = `player-${youtubePlayers.length}`;
-            wrapper.innerHTML += `<div id="${playerId}"></div>`;
-            wrapper.classList.add('muted');
-            videoContainer.appendChild(wrapper);
-
-            const player = new YT.Player(playerId, {
-                videoId: videoId,
-                events: {
-                    onReady: () => {
-                        youtubePlayers.push(player);
-                        player.mute();
-                    }
-                }
+            const player = videojs(videoId);
+            player.on('loadedmetadata', () => {
+                totalTimeDisplay.textContent = formatTime(Math.floor(player.duration()));
             });
 
-            createIdButton(id, () => unmuteAndHighlight(player, wrapper));
-        }
+            const videoIndex = videoList.length;
+            videoList.push({ player, startTime, title, url, wrapper: videoWrapper });
 
-        function addGoogleDriveVideo(id, title, url) {
-            const wrapper = createVideoWrapper(id, title);
-            const iframe = document.createElement('iframe');
-            iframe.src = url.replace("/view", "/preview");
-            iframe.setAttribute("allow", "autoplay");
-            wrapper.classList.add('muted');
-            wrapper.appendChild(iframe);
-            videoContainer.appendChild(wrapper);
+            const startTimeInput = videoWrapper.querySelector('.start-time');
+            startTimeInput.addEventListener('input', () => {
+                const updatedStartTime = parseFloat(startTimeInput.value) || 0;
+                videoList[videoIndex].startTime = updatedStartTime;
+            });
 
-            createIdButton(id, () => alert("Google Drive動画のミュート解除はサポートされていません"));
-        }
-
-        function addLocalVideo(id, title, file) {
-            const wrapper = createVideoWrapper(id, title);
-            const video = document.createElement('video');
-            video.src = URL.createObjectURL(file);
-            video.controls = true;
-            video.muted = true;
-            wrapper.classList.add('muted');
-            localVideos.push(video);
-            wrapper.appendChild(video);
-            videoContainer.appendChild(wrapper);
-
-            createIdButton(id, () => unmuteAndHighlight(video, wrapper));
-        }
-
-        function createVideoWrapper(id, title) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'video-wrapper';
-            const titleDiv = document.createElement('div');
-            titleDiv.className = 'video-title';
-            titleDiv.textContent = `${title} (ID: ${id})`;
-            wrapper.appendChild(titleDiv);
-            return wrapper;
-        }
-
-        function createIdButton(id, onClick) {
-            const button = document.createElement('button');
-            button.textContent = `ID: ${id}`;
-            button.onclick = onClick;
-            idButtons.appendChild(button);
-        }
-
-        function unmuteAndHighlight(videoOrPlayer, wrapper) {
-            muteAll();
-            if (videoOrPlayer instanceof YT.Player) {
-                videoOrPlayer.unMute();
+            if (videoIndex > 0) {
+                player.muted(true);
+                videoWrapper.classList.add('muted');
             } else {
-                videoOrPlayer.muted = false;
+                videoWrapper.classList.add('highlighted');
             }
-            highlightVideo(wrapper);
+
+            updateVideoDropdown();
         }
 
-        function muteAll() {
-            localVideos.forEach(video => (video.muted = true));
-            youtubePlayers.forEach(player => player.mute());
+        // Update video dropdown
+        function updateVideoDropdown() {
+            selectVideoDropdown.innerHTML = `<option value="" disabled selected>Select a Video</option>`;
+            videoList.forEach((_, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `Video ${index + 1}`;
+                selectVideoDropdown.appendChild(option);
+            });
         }
 
-        function highlightVideo(wrapper) {
-            if (currentHighlightedVideo) {
-                currentHighlightedVideo.classList.remove('highlighted');
-                currentHighlightedVideo.classList.add('muted');
+        // Save data to JSON
+        document.getElementById('save-data').addEventListener('click', () => {
+            const dataToSave = videoList.map(({ startTime, title, url }) => ({
+                startTime,
+                title,
+                url,
+            }));
+
+            const jsonBlob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
+            const downloadLink = document.createElement('a');
+            downloadLink.href = URL.createObjectURL(jsonBlob);
+            downloadLink.download = 'video_manager_data.json';
+            downloadLink.click();
+        });
+
+        // Load data from JSON file
+        document.getElementById('load-data').addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.style.display = 'none';
+
+            input.addEventListener('change', async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const fileContent = await file.text();
+                const savedData = JSON.parse(fileContent);
+
+                // Clear existing videos
+                videoList.length = 0;
+                videoListContainer.innerHTML = '';
+                selectVideoDropdown.innerHTML = '<option value="" disabled selected>Select a Video</option>';
+
+                // Add videos using the saved data
+                savedData.forEach(({ startTime, title, url }) => {
+                    addVideo({ title, url, startTime });
+                });
+
+                alert('Data loaded successfully!');
+            });
+
+            input.click();
+        });
+
+        // Seek bar functionality
+        seekBar.addEventListener('input', () => {
+            const relativeSeekTime = (seekBar.value / 100) * videoList[0]?.player.duration();
+            videoList.forEach(({ player, startTime }) => {
+                player.currentTime(Math.max(0, relativeSeekTime + startTime));
+            });
+            currentTimeDisplay.textContent = formatTime(Math.floor(relativeSeekTime));
+        });
+
+        // Play all videos
+        document.getElementById('play-all').addEventListener('click', () => {
+            videoList.forEach(({ player, startTime }) => {
+                const currentSeekTime = (seekBar.value / 100) * videoList[0]?.player.duration();
+                player.currentTime(Math.max(0, currentSeekTime + startTime));
+                player.play();
+            });
+        });
+
+        // Pause all videos
+        document.getElementById('pause-all').addEventListener('click', () => {
+            videoList.forEach(({ player }) => player.pause());
+        });
+
+        // Toggle play/pause
+        togglePlayPauseButton.addEventListener('click', () => {
+            if (isPlaying) {
+                videoList.forEach(({ player }) => player.pause());
+                togglePlayPauseButton.textContent = 'Play';
+            } else {
+                videoList.forEach(({ player, startTime }) => {
+                    const currentSeekTime = (seekBar.value / 100) * videoList[0]?.player.duration();
+                    player.currentTime(Math.max(0, currentSeekTime + startTime));
+                    player.play();
+                });
+                togglePlayPauseButton.textContent = 'Pause';
             }
-            wrapper.classList.remove('muted');
-            wrapper.classList.add('highlighted');
-            currentHighlightedVideo = wrapper;
+            isPlaying = !isPlaying;
+        });
+
+        // Select video and highlight
+        selectVideoDropdown.addEventListener('change', (event) => {
+            const selectedIndex = parseInt(event.target.value, 10);
+            videoList.forEach((item, index) => {
+                if (index === selectedIndex) {
+                    item.player.muted(false);
+                    item.wrapper.classList.remove('muted');
+                    item.wrapper.classList.add('highlighted');
+                } else {
+                    item.player.muted(true);
+                    item.wrapper.classList.remove('highlighted');
+                    item.wrapper.classList.add('muted');
+                }
+            });
+        });
+
+        // Utility function: Format time
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
         }
 
-        function playAll() {
-            localVideos.forEach(video => video.play());
-            youtubePlayers.forEach(player => player.playVideo());
-        }
+        // Add video on button click
+        document.getElementById('add-video').addEventListener('click', () => {
+            const youtubeUrl = youtubeUrlInput.value.trim();
+            const videoTitle = videoTitleInput.value.trim() || `Video ${videoList.length + 1}`;
+            const localVideoFile = localVideoInput.files[0];
 
-        function pauseAll() {
-            localVideos.forEach(video => video.pause());
-            youtubePlayers.forEach(player => player.pauseVideo());
-        }
+            if (!youtubeUrl && !localVideoFile) {
+                return alert('Please provide a valid YouTube URL or upload a local video.');
+            }
+
+            let videoSource;
+            if (localVideoFile) {
+                videoSource = localVideoFile.path || localVideoFile.webkitRelativePath || localVideoFile.name;
+            } else {
+                videoSource = youtubeUrl;
+            }
+
+            addVideo({ title: videoTitle, url: videoSource, startTime: 0 });
+            youtubeUrlInput.value = '';
+            localVideoInput.value = '';
+            videoTitleInput.value = '';
+        });
+
     </script>
+
 </body>
 
 </html>

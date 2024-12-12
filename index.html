@@ -108,7 +108,8 @@
         <button id="pause-all">Pause All</button>
         <button id="mute-main">Mute All Except Main</button>
         <button id="save-data">Save Data</button>
-        <input type="file" id="load-data" accept=".json">
+        <button id="load-data">load-data</button>
+        <!-- <input type="file" id="load-data" accept=".json"> -->
         <select id="select-video">
             <option value="" disabled selected>Select a Video</option>
         </select>
@@ -131,11 +132,45 @@
         <button id="save-note">Save Note</button>
         <div id="saved-notes"></div>
     </div>
+    <button id="open-popup" onclick="openNotePopup()">Open Notes Manager</button>
 
     <script src="https://cdn.jsdelivr.net/npm/video.js/dist/video.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/videojs-youtube/dist/Youtube.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lodash/lodash.min.js"></script>
     <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+
+    <script>
+        let noteWindow = null;
+        var notes = []; // To store the notes with timestamps
+
+        // Open the Note popup
+        function openNotePopup() {
+            if (!noteWindow || noteWindow.closed) {
+                noteWindow = window.open('note.html', 'Notes', 'width=500,height=600');
+                noteWindow.onload = () => {
+                    noteWindow.postMessage({ action: 'init', notes: notes }, '*');
+                };
+            } else {
+                noteWindow.focus();
+            }
+        }
+
+        // Add event listener for messages from the note popup
+        window.addEventListener('message', (event) => {
+            if (event.data.action === 'save-note') {
+                const note = event.data.note;
+                notes.push(note);
+            }
+            if (event.data.action === 'seek-to') {
+                const seekValue = event.data.seekValue;
+                const seekBar = document.getElementById('seek-bar');
+                seekBar.value = seekValue;
+                const currentTime = (seekValue / 100) * videoList[0]?.player.duration();
+                videoList.forEach(({ player }) => player.currentTime(currentTime));
+            }
+        });
+
+    </script>
     <script>
 
         const videoList = [];
@@ -231,11 +266,14 @@
 
         // Save data to JSON
         document.getElementById('save-data').addEventListener('click', () => {
-            const dataToSave = videoList.map(({ startTime, title, url }) => ({
-                startTime,
-                title,
-                url,
-            }));
+            const dataToSave = {
+                videos: videoList.map(({ startTime, title, url }) => ({
+                    startTime,
+                    title,
+                    url,
+                })),
+                notes, // Include notes in the saved data
+            };
 
             const jsonBlob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
             const downloadLink = document.createElement('a');
@@ -260,13 +298,18 @@
 
                 // Clear existing videos
                 videoList.length = 0;
+                notes = [];
                 videoListContainer.innerHTML = '';
                 selectVideoDropdown.innerHTML = '<option value="" disabled selected>Select a Video</option>';
 
                 // Add videos using the saved data
-                savedData.forEach(({ startTime, title, url }) => {
+                savedData.videos.forEach(({ startTime, title, url }) => {
                     addVideo({ title, url, startTime });
                 });
+                notes = savedData.notes || [];
+                if (noteWindow && !noteWindow.closed) {
+                    noteWindow.postMessage({ action: 'init', notes }, '*');
+                }
 
                 alert('Data loaded successfully!');
             });
