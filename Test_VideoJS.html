@@ -108,7 +108,8 @@
         <button id="pause-all">Pause All</button>
         <button id="mute-main">Mute All Except Main</button>
         <button id="save-data">Save Data</button>
-        <input type="file" id="load-data" accept=".json">
+        <button id="load-data">load-data</button>
+        <!-- <input type="file" id="load-data" accept=".json"> -->
         <select id="select-video">
             <option value="" disabled selected>Select a Video</option>
         </select>
@@ -140,7 +141,7 @@
 
     <script>
         let noteWindow = null;
-        const notes = []; // To store the notes with timestamps
+        var notes = []; // To store the notes with timestamps
 
         // Open the Note popup
         function openNotePopup() {
@@ -265,11 +266,14 @@
 
         // Save data to JSON
         document.getElementById('save-data').addEventListener('click', () => {
-            const dataToSave = videoList.map(({ startTime, title, url }) => ({
-                startTime,
-                title,
-                url,
-            }));
+            const dataToSave = {
+                videos: videoList.map(({ startTime, title, url }) => ({
+                    startTime,
+                    title,
+                    url,
+                })),
+                notes, // Include notes in the saved data
+            };
 
             const jsonBlob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
             const downloadLink = document.createElement('a');
@@ -294,13 +298,18 @@
 
                 // Clear existing videos
                 videoList.length = 0;
+                notes = [];
                 videoListContainer.innerHTML = '';
                 selectVideoDropdown.innerHTML = '<option value="" disabled selected>Select a Video</option>';
 
                 // Add videos using the saved data
-                savedData.forEach(({ startTime, title, url }) => {
+                savedData.videos.forEach(({ startTime, title, url }) => {
                     addVideo({ title, url, startTime });
                 });
+                notes = savedData.notes || [];
+                if (noteWindow && !noteWindow.closed) {
+                    noteWindow.postMessage({ action: 'init', notes }, '*');
+                }
 
                 alert('Data loaded successfully!');
             });
